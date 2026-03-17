@@ -7,24 +7,22 @@ websockets>=10.0
 
 # Display/Hardware
 pillow>=9.0.0
-#luma.lcd>=3.0.0
-#luma.core>=2.4.0
+#luma.lcd>=3.0.0                  # ILI9488 display driver
+#luma.core>=2.4.0                 # Display core library
 
 # Adafruit CircuitPython Libraries (for GPIO, buttons, sensors)
-adafruit-blinka>=8.0.0           # GPIO board support
-adafruit-circuitpython-keypad>=1.0.0  # Keypad/button support
-adafruit-circuitpython-pn532>=1.0.0   # NFC/RFID reader
+adafruit-blinka>=8.0.0           # GPIO board support for CircuitPython
+adafruit-circuitpython-pn532>=1.4.0   # NFC/RFID reader (I2C)
 
-# NFC/RFID
-#pi-rc522>=2.2.1
-#pirc522>=0.0.2
+# GPIO and RFID
+RPi.GPIO>=0.7.0                  # Raspberry Pi GPIO control
+#pirc522>=0.0.2                   # RC522 RFID reader (SPI)
 
 # Rotary Encoder
-ruhrohrotaryio>=1.0.0
+ruhrohrotaryio>=1.0.0            # Rotary encoder with CircuitPython
 
 # GPIO (Raspberry Pi specific)
-lgpio>=0.2.0                     # New RPi GPIO library
-# Note: RPi.GPIO or rpi-lgpio - can also use system package
+lgpio>=0.2.0                     # New RPi GPIO library (alternative to RPi.GPIO)
 
 # Async
 aiofiles>=23.0.0
