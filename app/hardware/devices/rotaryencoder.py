@@ -1,6 +1,6 @@
 import board
 #from ruhrohrotaryio import IncrementalEncoder as rotaryio_IncrementalEncoder
-import rotaryio
+from ruhrohrotaryio import IncrementalEncoder as rotaryio_IncrementalEncoder
 import threading
 import time
 import logging
