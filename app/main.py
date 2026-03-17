@@ -35,8 +35,8 @@ class PiClientApp:
     def __init__(self):
         """Initialize all components."""
         self.config = config
-        self.api_client = BackendAPIClient(base_url=config.BACKEND_URL)
-        self.ws_client = BackendWebSocketClient(url=config.BACKEND_WS_URL)
+        self.api_client = BackendAPIClient(backend_url=config.BACKEND_URL)
+        self.ws_client = BackendWebSocketClient(backend_ws_url=config.BACKEND_WS_URL)
         self.event_translator = EventTranslator(api_client=self.api_client)
         self.state_manager = StateManager()
         self.connection_monitor = ConnectionMonitor(
