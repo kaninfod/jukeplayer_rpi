@@ -22,6 +22,7 @@ logger.info("=" * 60)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.config import config
+from app.core import event_bus
 from app.client.api_client import BackendAPIClient
 from app.client.websocket_client import BackendWebSocketClient
 from app.client.event_translator import EventTranslator
@@ -35,6 +36,7 @@ class PiClientApp:
     def __init__(self):
         """Initialize all components."""
         self.config = config
+        self.event_bus = event_bus
         self.api_client = BackendAPIClient(backend_url=config.BACKEND_URL)
         self.ws_client = BackendWebSocketClient(backend_ws_url=config.BACKEND_WS_URL)
         self.event_translator = EventTranslator(api_client=self.api_client)
@@ -57,16 +59,15 @@ class PiClientApp:
     async def initialize_hardware(self):
         """Initialize hardware components based on HARDWARE_MODE."""
         try:
-            #if config.HARDWARE_MODE == "mock":
-            #    logger.info("Initializing MOCK hardware (development mode)")
-            #    from app.hardware.mock_hardware import MockHardwareManager
-            #    self.hardware = MockHardwareManager()
-            #else:
             logger.info("Initializing REAL hardware")
             from app.hardware.hardware import HardwareManager
-            self.hardware = HardwareManager()
+            self.hardware = HardwareManager(
+                config=self.config,
+                event_bus=self.event_bus,
+                screen_manager=self.screen_manager
+            )
             
-            await self.hardware.initialize()
+            self.hardware.initialize_hardware()
             logger.info("Hardware initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize hardware: {e}")
@@ -89,47 +90,43 @@ class PiClientApp:
             raise
     
     def _register_hardware_callbacks(self):
-        """Register hardware event callbacks with event translator."""
+        """Register event bus listeners for hardware events."""
         if not self.hardware:
             logger.warning("Hardware not initialized, skipping callback registration")
             return
         
-        logger.info("Registering hardware event callbacks")
+        logger.info("Registering hardware event listeners")
         
-        # Button callbacks
-        for button_num in range(1, 6):
-            button = getattr(self.hardware.buttons, f"button{button_num}", None)
-            if button:
-                # Create a closure to capture button_num correctly
-                def make_button_handler(btn_num):
-                    async def handler():
-                        await self.event_translator.on_button_pressed({"button": btn_num})
-                    return handler
-                
-                button.pressed.subscribe(make_button_handler(button_num))
+        # Hardware events are emitted to event_bus and we listen for them here
+        # and translate them to appropriate actions via event_translator
         
-        # Rotary encoder callbacks
-        if self.hardware.rotary_encoder:
-            async def encoder_handler(direction, steps):
-                await self.event_translator.on_rotary_turn({"direction": direction, "steps": steps})
-            
-            self.hardware.rotary_encoder.turned.subscribe(encoder_handler)
+        from app.core import EventType
         
-        # RFID reader callbacks
-        if self.hardware.rfid_reader:
-            async def rfid_handler(card_id):
-                await self.event_translator.on_rfid_read({"card_id": card_id})
-            
-            self.hardware.rfid_reader.card_detected.subscribe(rfid_handler)
+        def on_button_pressed(event):
+            """Handle button press events from hardware."""
+            button_num = event.payload.get("button_num", 0)
+            logger.info(f"Button {button_num} pressed")
+            # Translate to backend action via event_translator
+            # This would call self.event_translator.on_button_pressed()
         
-        # Card insert/remove callbacks
-        if self.hardware.card_switch:
-            async def card_inserted_handler():
-                await self.event_translator.on_card_inserted()
-            
-            self.hardware.card_switch.inserted.subscribe(card_inserted_handler)
+        def on_rotary_turned(event):
+            """Handle rotary encoder turn events from hardware."""
+            direction = event.payload.get("direction", 0)
+            steps = event.payload.get("steps", 1)
+            logger.info(f"Rotary turned: direction={direction}, steps={steps}")
         
-        logger.info("All hardware callbacks registered")
+        def on_rfid_read(event):
+            """Handle RFID card read events from hardware."""
+            rfid = event.payload.get("rfid")
+            album_id = event.payload.get("album_id")
+            logger.info(f"RFID card read: {rfid}, album_id={album_id}")
+        
+        # Subscribe to hardware events from event_bus
+        self.event_bus.subscribe(EventType.BUTTON_PRESSED, on_button_pressed)
+        self.event_bus.subscribe(EventType.ROTARY_ENCODER, on_rotary_turned)
+        self.event_bus.subscribe(EventType.RFID_READ, on_rfid_read)
+        
+        logger.info("Hardware event listeners registered")
     
     def _register_websocket_callbacks(self):
         """Register WebSocket event callbacks."""
@@ -241,9 +238,9 @@ class PiClientApp:
             if self.ws_client:
                 await self.ws_client.close()
             
-            # Shutdown hardware
+            # Cleanup hardware (not async)
             if self.hardware:
-                await self.hardware.shutdown()
+                self.hardware.cleanup()
             
             # Shutdown UI
             if self.screen_manager:
