@@ -7,8 +7,8 @@ websockets>=10.0
 
 # Display/Hardware
 pillow>=9.0.0
-luma.lcd>=3.0.0
-luma.core>=2.4.0
+#luma.lcd>=3.0.0
+#luma.core>=2.4.0
 
 # Adafruit CircuitPython Libraries (for GPIO, buttons, sensors)
 adafruit-blinka>=8.0.0           # GPIO board support
