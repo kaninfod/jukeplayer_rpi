@@ -51,6 +51,7 @@ class PiClientApp:
         # Hardware will be initialized based on HARDWARE_MODE
         self.hardware = None
         self.screen_manager = None
+        self.event_loop = None  # Will be set in run() to schedule async tasks from callbacks
         
         self.is_running = False
         
@@ -120,10 +121,15 @@ class PiClientApp:
             album_id = event.payload.get("album_id")
             logger.info(f"RFID card read: UID={rfid}, album_id={album_id}")
             
-            if album_id:
+            if album_id and self.event_loop:
                 logger.info(f"Playing album {album_id}")
-                # Create async task to call backend API
-                asyncio.create_task(self.api_client.play_album_from_albumid(album_id))
+                # Schedule the async API call on the event loop from this sync callback
+                asyncio.run_coroutine_threadsafe(
+                    self.api_client.play_album_from_albumid(album_id),
+                    self.event_loop
+                )
+            elif album_id:
+                logger.warning("Event loop not available yet, skipping playback request")
             else:
                 logger.warning("RFID read succeeded but no album_id found")
         
@@ -196,6 +202,7 @@ class PiClientApp:
         """Run the main application event loop."""
         try:
             self.is_running = True
+            self.event_loop = asyncio.get_running_loop()  # Capture event loop for async calls from callbacks
             logger.info("Starting Pi Client Application")
             
             # Initialize all components
