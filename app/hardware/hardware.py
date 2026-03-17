@@ -150,43 +150,21 @@ class HardwareManager:
 
 
     def _on_rfid_switch_activated(self):
-        """Handle switch activation (card inserted) for RFID. Triggered by CircuitPython keypad event."""
+        """Handle card insertion - initiate RFID read. Triggered by CircuitPython keypad event."""
         
         logger.info("=" * 70)
         logger.info("1. HARDWARE TRIGGER")
-        logger.info("   └─ PushButton detected card insertion")
+        logger.info("   └─ Card detected - initiating read")
         
-        from app.core.service_container import get_service
-        # playback_service = get_service("playback_service")
-        nfc_state = get_service("nfc_encoding_state")
-        encoding_mode = nfc_state.is_active()
-
-        logger.info("2. CHECK MODE")
-        logger.info(f"   └─ Encoding mode active: {encoding_mode}")
-
-        if encoding_mode:    
-            album_id = nfc_state.get_album_id()
-            logger.info(f"   └─ Write mode: encoding album_id={album_id}")
-            data = {"album_id": album_id}
-            reader = self.rfid_reader()
-            try:
-                result = reader.write_data(data, result_callback=lambda result: self._rfid_write_callback(result, reader))
-                logger.info("   └─ Write operation initiated")
-            except Exception as e:
-                logger.error(f"   ❌ Write operation failed: {e}")
-                reader.cleanup()
-
-        else:
-            logger.info("   └─ Read mode: card detection will initiate read")
-            logger.info("3. INSTANTIATE & START READING")
-            logger.info("   └─ Creating PN532Reader instance")
-            reader = self.rfid_reader()
-            try:
-                logger.info("   └─ Calling reader.start_reading() with callback")
-                reader.start_reading(result_callback=lambda result: self._rfid_read_callback(result, reader))
-            except Exception as e:
-                logger.error(f"   ❌ start_reading() failed: {e}")
-                reader.cleanup()
+        logger.info("2. INSTANTIATE & START READING")
+        logger.info("   └─ Creating PN532Reader instance")
+        reader = self.rfid_reader()
+        try:
+            logger.info("   └─ Calling reader.start_reading() with callback")
+            reader.start_reading(result_callback=lambda result: self._rfid_read_callback(result, reader))
+        except Exception as e:
+            logger.error(f"   ❌ start_reading() failed: {e}")
+            reader.cleanup()
 
     def _rfid_read_callback(self, result, reader=None):
         """Callback function to handle RFID read results from PN532Reader."""

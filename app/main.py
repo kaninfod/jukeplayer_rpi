@@ -106,20 +106,26 @@ class PiClientApp:
             """Handle button press events from hardware."""
             button_num = event.payload.get("button_num", 0)
             logger.info(f"Button {button_num} pressed")
-            # Translate to backend action via event_translator
-            # This would call self.event_translator.on_button_pressed()
+            # TODO: Translate to backend action via event_translator
         
         def on_rotary_turned(event):
             """Handle rotary encoder turn events from hardware."""
-            direction = event.payload.get("direction", 0)
-            steps = event.payload.get("steps", 1)
-            logger.info(f"Rotary turned: direction={direction}, steps={steps}")
+            direction = event.payload.get("direction", "")
+            logger.info(f"Rotary turned: {direction}")
+            # TODO: Translate to volume control via event_translator
         
         def on_rfid_read(event):
-            """Handle RFID card read events from hardware."""
+            """Handle RFID card read - play the album via backend API."""
             rfid = event.payload.get("rfid")
             album_id = event.payload.get("album_id")
-            logger.info(f"RFID card read: {rfid}, album_id={album_id}")
+            logger.info(f"RFID card read: UID={rfid}, album_id={album_id}")
+            
+            if album_id:
+                logger.info(f"Playing album {album_id}")
+                # Create async task to call backend API
+                asyncio.create_task(self.api_client.play_album_from_albumid(album_id))
+            else:
+                logger.warning("RFID read succeeded but no album_id found")
         
         # Subscribe to hardware events from event_bus
         self.event_bus.subscribe(EventType.BUTTON_PRESSED, on_button_pressed)
