@@ -4,12 +4,29 @@ Handles initialization and callbacks for all hardware devices.
 """
 #from .devices.ili9488 import ILI9488
 #from .devices.rfid import RC522Reader
-from .devices.pushbutton import PushButton
-from .devices.rotaryencoder import RotaryEncoder
 import logging
 from app.core import EventType, Event
 
 logger = logging.getLogger(__name__)
+
+# Lazy imports for CircuitPython device dependencies (requires board module)
+PushButton = None
+RotaryEncoder = None
+
+def _load_circuitpython_devices():
+    """Lazily load CircuitPython device modules when hardware is needed."""
+    global PushButton, RotaryEncoder
+    if PushButton is None:
+        try:
+            from .devices.pushbutton import PushButton as _PushButton
+            from .devices.rotaryencoder import RotaryEncoder as _RotaryEncoder
+            PushButton = _PushButton
+            RotaryEncoder = _RotaryEncoder
+            logger.info("✓ CircuitPython device modules loaded successfully")
+        except ImportError as e:
+            logger.warning(f"⚠ Failed to load CircuitPython device modules: {e}")
+            logger.warning("  This is expected on systems without adafruit-blinka installed")
+            raise
 
 class HardwareManager:
     
@@ -50,6 +67,9 @@ class HardwareManager:
             return MockDisplay()
         
         try:
+            # Load CircuitPython devices (raises if board module not available)
+            _load_circuitpython_devices()
+            
             # Initialize display
             
             from .devices.mock_display import MockDisplay
