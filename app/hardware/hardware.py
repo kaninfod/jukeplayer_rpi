@@ -254,6 +254,7 @@ class HardwareManager:
     
     def _on_button1_press(self):
         """Handle button 1 press - Previous track"""
+        logger.info("Button 1 press: Previous track")
         self.event_bus.emit(Event(
             type=EventType.BUTTON_PRESSED,
             payload={"button": 1, "action": "previous_track"}
@@ -261,6 +262,7 @@ class HardwareManager:
 
     def _on_button2_press(self):
         """Handle button 2 press - Play/Pause"""
+        logger.info("Button 2 press: Play/Pause")
         self.event_bus.emit(Event(
             type=EventType.BUTTON_PRESSED,
             payload={"button": 2, "action": "play_pause"}
@@ -268,6 +270,7 @@ class HardwareManager:
 
     def _on_button3_press(self):
         """Handle button 3 press - Next track"""
+        logger.info("Button 3 press: Next track")
         self.event_bus.emit(Event(
             type=EventType.BUTTON_PRESSED,
             payload={"button": 3, "action": "next_track"}
@@ -275,7 +278,7 @@ class HardwareManager:
     
     def _on_button4_press(self):
         """Handle button 4 press - Stop"""
-        logger.info("Button 4 press detected")
+        logger.info("Button 4 press: Stop")
         self.event_bus.emit(Event(
             type=EventType.BUTTON_PRESSED,
             payload={"button": 4, "action": "stop"}

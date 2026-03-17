@@ -104,16 +104,53 @@ class PiClientApp:
         from app.core import EventType
         
         def on_button_pressed(event):
-            """Handle button press events from hardware."""
-            button_num = event.payload.get("button_num", 0)
-            logger.info(f"Button {button_num} pressed")
-            # TODO: Translate to backend action via event_translator
+            """Handle button press events - call backend API for playback control."""
+            action = event.payload.get("action", "")
+            button = event.payload.get("button", 0)
+            logger.info(f"Button {button} pressed: {action}")
+            
+            if not self.event_loop:
+                logger.warning("Event loop not available, skipping button action")
+                return
+            
+            # Map actions to API calls
+            api_calls = {
+                "previous_track": self.api_client.previous_track,
+                "play_pause": self.api_client.play_pause,
+                "next_track": self.api_client.next_track,
+                "stop": self.api_client.stop,
+            }
+            
+            if action in api_calls:
+                logger.info(f"Calling backend API: {action}")
+                asyncio.run_coroutine_threadsafe(
+                    api_calls[action](),
+                    self.event_loop
+                )
+            else:
+                logger.warning(f"Unknown button action: {action}")
         
         def on_rotary_turned(event):
-            """Handle rotary encoder turn events from hardware."""
+            """Handle rotary encoder turn events - control volume."""
             direction = event.payload.get("direction", "")
             logger.info(f"Rotary turned: {direction}")
-            # TODO: Translate to volume control via event_translator
+            
+            if not self.event_loop:
+                logger.warning("Event loop not available, skipping volume control")
+                return
+            
+            if direction == "CW":
+                logger.info("Volume up")
+                asyncio.run_coroutine_threadsafe(
+                    self.api_client.volume_up(),
+                    self.event_loop
+                )
+            elif direction == "CCW":
+                logger.info("Volume down")
+                asyncio.run_coroutine_threadsafe(
+                    self.api_client.volume_down(),
+                    self.event_loop
+                )
         
         def on_rfid_read(event):
             """Handle RFID card read - play the album via backend API."""
