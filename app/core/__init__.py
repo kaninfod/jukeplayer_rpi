@@ -1,1 +1,16 @@
-"""Core utilities"""
+"""
+Core module exports for event system and shared utilities.
+"""
+
+from app.core.event_bus import Event, EventBus, event_bus
+from app.core.event_factory import EventType
+from app.core.logging_config import setup_logging
+
+__all__ = [
+    'Event',
+    'EventBus',
+    'event_bus',
+    'EventType',
+    'setup_logging',
+]
+
