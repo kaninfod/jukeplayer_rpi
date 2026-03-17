@@ -48,6 +48,11 @@ class PiConfig:
     # Card insertion detection GPIO
     NFC_CARD_SWITCH_GPIO = int(os.getenv("NFC_CARD_SWITCH_GPIO", "4"))
     
+    # RFID block configuration (maps logical names to block numbers)
+    RFID_BLOCKS = {
+        "album_id": 4
+    }
+    
     # RFID reader SPI settings
     RFID_CS_PIN = int(os.getenv("RFID_CS_PIN", "7"))
     

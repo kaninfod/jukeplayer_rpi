@@ -192,7 +192,7 @@ class PN532Reader:
         
         Returns UID and named block data in a dict.
         """
-        from app.config import Config
+        from app.config import PiConfig
         status = None
         
         # Attempt read with retry logic (only for exceptions, not timeouts)
@@ -227,7 +227,7 @@ class PN532Reader:
                     block_data = {}
                     
                     logger.info("   ├─ Reading configured blocks:")
-                    for name, block in Config.RFID_BLOCKS.items():
+                    for name, block in PiConfig.RFID_BLOCKS.items():
                         try:
                             logger.debug(f"   │  ├─ Reading block {block} ({name})")
                             data = self._read_block(pn532, uid, block, key, MIFARE_CMD_AUTH_A)
@@ -411,7 +411,7 @@ class PN532Reader:
             uid: card UID bytes
             key: Mifare authentication key (default: 0xFF*6, factory default)
         """
-        from app.config import Config
+        from app.config import PiConfig
         MIFARE_CMD_AUTH_A = 0x60
         
         uid_number = 0
@@ -430,7 +430,7 @@ class PN532Reader:
         block_data = {}
         blocks_written = []  # Track successful writes for better error reporting
         logger.info("   ├─ Writing configured blocks:")
-        for name, block_number in Config.RFID_BLOCKS.items():
+        for name, block_number in PiConfig.RFID_BLOCKS.items():
             try:
                 value = data_dict.get(name, "")
                 data = self.encode_string_for_block(value)
@@ -480,7 +480,7 @@ class PN532Reader:
         
         Returns: dict with status, uid, blocks, and attempt count
         """
-        from app.config import Config
+        from app.config import PiConfig
         status = None
         
         try:
