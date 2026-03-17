@@ -5,6 +5,7 @@ Core module exports for event system and shared utilities.
 from app.core.event_bus import Event, EventBus, event_bus
 from app.core.event_factory import EventType
 from app.core.logging_config import setup_logging
+from app.core.player_status import PlayerStatus
 
 __all__ = [
     'Event',
@@ -12,5 +13,6 @@ __all__ = [
     'event_bus',
     'EventType',
     'setup_logging',
+    'PlayerStatus',
 ]
 
