@@ -194,7 +194,7 @@ class PiClientApp:
             
             # Initialize all components
             await self.initialize_hardware()
-            await self.initialize_ui()
+            #await self.initialize_ui()
             
             # Register event callbacks
             self._register_hardware_callbacks()
