@@ -19,7 +19,8 @@ RPi.GPIO>=0.7.0                  # Raspberry Pi GPIO control
 #pirc522>=0.0.2                   # RC522 RFID reader (SPI)
 
 # Rotary Encoder
-ruhrohrotaryio>=1.0.0            # Rotary encoder with CircuitPython
+#ruhrohrotaryio>=1.0.0            # Rotary encoder with CircuitPython
+circuitpython-ruhrohrotaryio
 
 # GPIO (Raspberry Pi specific)
 lgpio>=0.2.0                     # New RPi GPIO library (alternative to RPi.GPIO)
