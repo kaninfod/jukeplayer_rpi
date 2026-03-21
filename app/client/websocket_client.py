@@ -68,21 +68,31 @@ class BackendWebSocketClient:
             await self.websocket.send(json.dumps(registration_msg))
             logger.info(f"📝 Registration message sent: {self.client_name}")
             
-            # Wait for registration response
-            response = await asyncio.wait_for(self.websocket.recv(), timeout=5)
-            response_data = json.loads(response)
-            
-            if response_data.get("type") == "register_response":
-                payload = response_data.get("payload", {})
-                if payload.get("status") == "success":
-                    self.client_id = payload.get("client_id")
-                    logger.info(f"✅ Registration successful: {self.client_name} (ID: {self.client_id})")
+            # Wait for registration response (may receive other messages first)
+            # Keep receiving until we get the register_response
+            import time
+            timeout_end = time.time() + 5
+            while time.time() < timeout_end:
+                response = await asyncio.wait_for(
+                    self.websocket.recv(),
+                    timeout=max(0.1, timeout_end - time.time())
+                )
+                response_data = json.loads(response)
+                
+                if response_data.get("type") == "register_response":
+                    payload = response_data.get("payload", {})
+                    if payload.get("status") == "success":
+                        self.client_id = payload.get("client_id")
+                        logger.info(f"✅ Registration successful: {self.client_name} (ID: {self.client_id})")
+                        return
+                    else:
+                        logger.error(f"❌ Registration failed: {payload.get('message')}")
+                        raise Exception(f"Registration failed: {payload.get('message')}")
                 else:
-                    logger.error(f"❌ Registration failed: {payload.get('message')}")
-                    raise Exception(f"Registration failed: {payload.get('message')}")
-            else:
-                logger.error(f"❌ Unexpected response to registration: {response_data}")
-                raise Exception("Unexpected registration response")
+                    # Process other message types (e.g., current_track) during registration
+                    await self._handle_message(response)
+            
+            raise Exception("Registration timeout")
         
         except asyncio.TimeoutError:
             logger.error("❌ Registration response timeout")
