@@ -5,6 +5,7 @@ Orchestrates hardware, event translation, backend communication, and display.
 
 import asyncio
 import logging
+import json
 import sys
 from pathlib import Path
 
@@ -211,8 +212,48 @@ class PiClientApp:
             if self.screen_manager:
                 await self.screen_manager.show_message("Backend Disconnected", duration=0)
         
+        # NFC encoding handler
+        async def on_encode_nfc(message):
+            """Handle NFC encoding request from backend."""
+            try:
+                payload = message.get("payload", {})
+                album_id = payload.get("album_id")
+                logger.info(f"NFC encode request for album_id: {album_id}")
+                
+                if not self.hardware or not self.hardware.rfid_reader:
+                    logger.error("NFC reader not available")
+                    return
+                
+                # Instantiate reader and call write_data
+                reader = self.hardware.rfid_reader()
+                result = reader.write_data(album_id)
+                logger.info(f"NFC write result - status: {result.get('status')}, uid: {result.get('uid')}")
+                
+                # Send completion message back to backend via WebSocket
+                response = {
+                    "type": "nfc_encoding_complete",
+                    "payload": result
+                }
+                # Use event loop to send async message
+                asyncio.create_task(self.ws_client.ws.send(json.dumps(response)))
+            except Exception as e:
+                logger.error(f"Error handling NFC encoding: {e}", exc_info=True)
+                response = {
+                    "type": "nfc_encoding_complete",
+                    "payload": {
+                        "status": "error",
+                        "uid": None,
+                        "error_message": str(e)
+                    }
+                }
+                try:
+                    asyncio.create_task(self.ws_client.ws.send(json.dumps(response)))
+                except Exception as send_error:
+                    logger.error(f"Failed to send NFC error response: {send_error}")
+        
         # Register WebSocket callbacks
         self.ws_client.on("message", on_status_update)
+        self.ws_client.on("encode_nfc", on_encode_nfc)
         self.ws_client.on("connected", on_connected)
         self.ws_client.on("disconnected", on_disconnected)
         

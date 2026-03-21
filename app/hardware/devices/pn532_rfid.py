@@ -465,94 +465,68 @@ class PN532Reader:
         logger.info(f"   └─ All {len(blocks_written)} blocks written successfully")
         return uid_number, block_data
 
-    def write_data(self, data_dict, timeout=5, result_callback=None):
+    def write_data(self, album_id, timeout=5):
         """
-        Write a dict of {name: value} to the configured RFID blocks.
-        Includes 3-level recovery matching read strategy: L0/L1/L2.
+        Write album_id to RFID block 4.
         
-        Recovery strategy:
-        - Timeout (no card detected): Not a system error, don't retry
-        - Exception (auth failure, write error, ACK error): System error, retry with recovery
-        
-        - data_dict: dict with keys matching config.RFID_BLOCKS (e.g., {"album_id": "al-123"})
-        - timeout: seconds to wait for card per attempt
-        - result_callback: optional callback to receive final status
-        
-        Returns: dict with status, uid, blocks, and attempt count
+        Args:
+            album_id: Album ID string to write (will be padded to 16 bytes)
+            timeout: Seconds to wait for card detection
+            
+        Returns:
+            dict with keys:
+            - status: "success", "timeout", or "error"
+            - uid: Card UID as hex string (e.g., "0x12345678")
+            - error_message: Error description if status != "success"
         """
-        from app.config import PiConfig
-        status = None
+        MIFARE_CMD_AUTH_A = 0x60
+        KEY = b'\xFF\xFF\xFF\xFF\xFF\xFF'  # Default key
+        BLOCK_4 = 4
+        
+        logger.info("4. HARDWARE WRITE PROCESS")
         
         try:
-            # Attempt write with retry logic (only for exceptions, not timeouts)
-            max_retries = 3
-            for attempt in range(max_retries):
-                recovery_level = min(attempt, 2)  # 0, 1, 2 for attempts 0, 1, 2+
-                
-                try:
-                    if attempt == 0:
-                        logger.info("4. HARDWARE WRITE PROCESS")
-                    else:
-                        logger.info(f"4. HARDWARE WRITE PROCESS (Retry {attempt}/{max_retries-1}, L{recovery_level} recovery)")
-                    
-                    pn532 = self._init_pn532(recovery_level=recovery_level)
-                    
-                    logger.info(f"   ├─ Polling for card ({timeout} second timeout)")
-                    uid = self._poll_for_card(pn532, timeout=timeout)
-                    
-                    if uid is None:
-                        # Timeout is a card issue, not a system error - don't retry
-                        logger.warning("   ├─ Timeout: No card detected")
-                        status = {"status": "timeout", "error_message": "Card write timeout. Please try again.", "attempt": attempt}
-                        break  # Don't retry timeouts - they indicate bad card positioning
-                    else:
-                        # Card found, perform write operation
-                        # Note: key parameter can be extended here if different keys are needed
-                        uid_number, block_data = self._perform_write_operation(pn532, data_dict, uid)
-                        
-                        status = {"status": "success", "uid": uid_number, "blocks": block_data, "attempt": attempt}
-                        self._reset_consecutive_failure()  # Success resets failure counter
-                        break
-                        
-                except Exception as e:
-                    error_str = str(e)
-                    
-                    # Check if this is an authentication failure (card issue, not hardware)
-                    is_auth_error = "Authentication failed" in error_str or "key mismatch" in error_str.lower()
-                    
-                    if is_auth_error:
-                        # Auth failures are card problems, not recoverable with I2C reset
-                        logger.error(f"   ├─ Card authentication failed: {e}")
-                        status = {
-                            "status": "error",
-                            "error_message": f"Card authentication failed - card may have different key or be locked",
-                            "error_type": "AUTH_FAILURE",
-                            "attempt": attempt
-                        }
-                        break  # Don't retry auth failures - they won't be fixed by recovery
-                    else:
-                        # Hardware/system errors get recovery attempts
-                        logger.error(f"   ├─ System error (attempt {attempt}): {e}", exc_info=False)
-                        status = {"status": "error", "error_message": f"System error: {type(e).__name__}: {str(e)}", "attempt": attempt}
-                        
-                        # Retry on system errors with escalating recovery
-                        if attempt < max_retries - 1:
-                            logger.info(f"   ├─ Triggering L{recovery_level + 1} recovery on next attempt")
-                            continue
-                        else:
-                            # All retries exhausted - this is a cascade
-                            self._record_consecutive_failure()
-                            status["system_reset_needed"] = self._check_cascade_and_signal()
-                            break
-        
-        finally:
-            # ALWAYS call result_callback, even if unexpected exception occurs
-            if result_callback:
-                logger.info("   └─ Calling result_callback()")
-                try:
-                    result_callback(status)
-                except Exception as cb_e:
-                    logger.error(f"   ❌ Result callback error: {cb_e}", exc_info=True)
+            # Initialize PN532
+            logger.info("   ├─ Initializing PN532")
+            pn532 = self._init_pn532(recovery_level=0)
+            
+            # Poll for card
+            logger.info(f"   ├─ Polling for card ({timeout}s timeout)")
+            uid = self._poll_for_card(pn532, timeout=timeout)
+            
+            if uid is None:
+                logger.warning("   ├─ Timeout: No card detected")
+                return {"status": "timeout", "error_message": "No card detected. Please try again."}
+            
+            # Convert UID to hex string
+            uid_hex = "0x" + "".join(f"{b:02x}" for b in uid)
+            logger.info(f"   ├─ Card detected: {uid_hex}")
+            
+            # Authenticate block 4
+            logger.debug(f"   ├─ Authenticating block {BLOCK_4}")
+            auth = pn532.mifare_classic_authenticate_block(uid, BLOCK_4, MIFARE_CMD_AUTH_A, KEY)
+            
+            if not auth:
+                logger.error(f"   ├─ Authentication failed for block {BLOCK_4}")
+                return {"status": "error", "uid": uid_hex, "error_message": "Card authentication failed. Card may use different key."}
+            
+            # Prepare data (pad to 16 bytes)
+            data = album_id.encode("utf-8")[:16].ljust(16, b' ')
+            logger.debug(f"   ├─ Writing to block {BLOCK_4}: {album_id}")
+            
+            # Write to block
+            write_ok = pn532.mifare_classic_write_block(BLOCK_4, data)
+            
+            if not write_ok:
+                logger.error(f"   ├─ Write failed for block {BLOCK_4}")
+                return {"status": "error", "uid": uid_hex, "error_message": "Write operation failed."}
+            
+            logger.info(f"   └─ ✅ Write successful: {album_id}")
+            return {"status": "success", "uid": uid_hex}
+            
+        except Exception as e:
+            logger.error(f"   ├─ Exception: {e}", exc_info=False)
+            return {"status": "error", "error_message": f"{type(e).__name__}: {str(e)}"}
         
     def cleanup(self):
         """
