@@ -30,7 +30,7 @@ def _load_circuitpython_devices():
 
 class HardwareManager:
     
-    def __init__(self, config, event_bus, screen_manager=None):
+    def __init__(self, config, event_bus, screen_manager=None, app=None):
         """
         Initialize HardwareManager with dependency injection.
         
@@ -38,10 +38,12 @@ class HardwareManager:
             config: Configuration object for hardware settings
             event_bus: EventBus instance for event communication
             screen_manager: ScreenManager instance (can be set later)
+            app: PiClientApp instance (for accessing app state like encoding mode)
         """
         # Inject dependencies - no more direct imports needed
         self.config = config
         self.event_bus = event_bus
+        self.app = app  # Reference to app for checking encoding mode
         #self.screen_manager = screen_manager
         self.playback_service = None
         
@@ -150,21 +152,37 @@ class HardwareManager:
 
 
     def _on_rfid_switch_activated(self):
-        """Handle card insertion - initiate RFID read. Triggered by CircuitPython keypad event."""
+        """Handle card insertion - write if encoding, otherwise read. Triggered by CircuitPython keypad event."""
         
         logger.info("=" * 70)
         logger.info("1. HARDWARE TRIGGER")
-        logger.info("   └─ Card detected - initiating read")
+        logger.info("   └─ Card detected - checking mode...")
         
-        logger.info("2. INSTANTIATE & START READING")
-        logger.info("   └─ Creating PN532Reader instance")
-        reader = self.rfid_reader()
-        try:
-            logger.info("   └─ Calling reader.start_reading() with callback")
-            reader.start_reading(result_callback=lambda result: self._rfid_read_callback(result, reader))
-        except Exception as e:
-            logger.error(f"   ❌ start_reading() failed: {e}")
-            reader.cleanup()
+        # Check if we're in NFC encoding mode
+        if self.app and self.app.nfc_encoding_album_id:
+            # ENCODING MODE: Write the album ID to the card
+            logger.info(f"   └─ ENCODING MODE: Writing album_id={self.app.nfc_encoding_album_id}")
+            logger.info("2. INSTANTIATE & START WRITING")
+            logger.info("   └─ Creating PN532Reader instance for write")
+            reader = self.rfid_reader()
+            try:
+                # Synchronous write (blocking, but OK here since we're not in async handler)
+                result = reader.write_data(self.app.nfc_encoding_album_id)
+                logger.info(f"   └─ Write complete: status={result.get('status')}, uid={result.get('uid')}")
+            except Exception as e:
+                logger.error(f"   ❌ write_data() failed: {e}")
+        else:
+            # NORMAL MODE: Read from the card
+            logger.info("   └─ NORMAL MODE: Reading from card")
+            logger.info("2. INSTANTIATE & START READING")
+            logger.info("   └─ Creating PN532Reader instance")
+            reader = self.rfid_reader()
+            try:
+                logger.info("   └─ Calling reader.start_reading() with callback")
+                reader.start_reading(result_callback=lambda result: self._rfid_read_callback(result, reader))
+            except Exception as e:
+                logger.error(f"   ❌ start_reading() failed: {e}")
+                reader.cleanup()
 
     def _rfid_read_callback(self, result, reader=None):
         """Callback function to handle RFID read results from PN532Reader."""

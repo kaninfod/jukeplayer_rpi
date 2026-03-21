@@ -58,6 +58,9 @@ class PiClientApp:
         self.screen_manager = None
         self.event_loop = None  # Will be set in run() to schedule async tasks from callbacks
         
+        # NFC encoding state (used by microswitch to know when to write vs read)
+        self.nfc_encoding_album_id = None  # Set when encoding mode is active
+        
         self.is_running = False
         
         logger.info(f"Pi Client initialized - Mode: {config.HARDWARE_MODE}, Backend: {config.BACKEND_URL}, Client: {config.CLIENT_NAME}")
@@ -70,7 +73,8 @@ class PiClientApp:
             self.hardware = HardwareManager(
                 config=self.config,
                 event_bus=self.event_bus,
-                screen_manager=self.screen_manager
+                screen_manager=self.screen_manager,
+                app=self
             )
             
             self.hardware.initialize_hardware()
@@ -218,8 +222,22 @@ class PiClientApp:
             payload = message.get("payload", {})
             album_id = payload.get("album_id")
             logger.info(f"NFC encode request for album_id: {album_id} - launching background task")
-            # Fire and forget - don't block the message handler
-            asyncio.create_task(do_nfc_encoding(album_id))
+            # Set encoding mode BEFORE creating task (microswitch will see this flag)
+            self.nfc_encoding_album_id = album_id
+            # Fire and forget - don't block the message handler, but wrap with timeout for safety
+            asyncio.create_task(do_nfc_encoding_with_timeout(album_id))
+        
+        async def do_nfc_encoding_with_timeout(album_id):
+            """Wrap encoding task with timeout to prevent stuck flag."""
+            try:
+                # 30 second timeout - write_data has 5s timeout, so 30s is very safe
+                await asyncio.wait_for(do_nfc_encoding(album_id), timeout=30)
+            except asyncio.TimeoutError:
+                logger.error(f"[NFC-BG] Encoding timeout after 30 seconds - clearing flag")
+                self.nfc_encoding_album_id = None
+            except Exception as e:
+                logger.error(f"[NFC-BG] Encoding wrapper error: {e}")
+                self.nfc_encoding_album_id = None
         
         async def do_nfc_encoding(album_id):
             """Run NFC encoding in background to keep WebSocket responsive."""
@@ -265,6 +283,10 @@ class PiClientApp:
                         await self.ws_client.websocket.send(json.dumps(response))
                 except Exception as send_error:
                     logger.error(f"[NFC-BG] Failed to send error response: {send_error}")
+            finally:
+                # Clear encoding mode flag
+                self.nfc_encoding_album_id = None
+                logger.info("[NFC-BG] Encoding mode cleared")
         
         # Register WebSocket callbacks
         self.ws_client.on("message", on_status_update)
