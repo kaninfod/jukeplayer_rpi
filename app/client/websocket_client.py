@@ -1,6 +1,7 @@
 """
 WebSocket Client for Backend Status Updates
 Maintains real-time connection to backend and broadcasts status changes.
+Registers with backend on connection for client tracking.
 """
 
 import asyncio
@@ -16,30 +17,78 @@ logger = logging.getLogger(__name__)
 class BackendWebSocketClient:
     """WebSocket client for receiving real-time updates from backend."""
     
-    def __init__(self, backend_ws_url: str):
+    def __init__(self, backend_ws_url: str, client_name: str = "rpi_client", 
+                 capabilities: List[str] = None):
         """
         Initialize WebSocket client.
         
         Args:
             backend_ws_url: WebSocket URL for backend (e.g., "ws://192.168.1.100:8000/ws/mediaplayer/status")
+            client_name: User-friendly name for this client (from config)
+            capabilities: List of capabilities this client has (e.g., ['nfc_reader', 'display'])
         """
         self.url = backend_ws_url
+        self.client_name = client_name
+        self.capabilities = capabilities or ["nfc_reader", "display", "buttons"]
         self.websocket = None
         self.connected = False
+        self.client_id = None  # Set after registration
         self.listeners: Dict[str, List[Callable]] = {}
         self._listen_task = None
     
     async def connect(self):
-        """Connect to backend WebSocket server."""
+        """Connect to backend WebSocket server and register."""
         try:
             self.websocket = await websockets.connect(self.url)
             self.connected = True
             logger.info(f"✅ Connected to backend WebSocket: {self.url}")
+            
+            # Register with backend immediately after connecting
+            await self._register_with_backend()
+            
             # Start listening task
             self._listen_task = asyncio.create_task(self._listen())
         except Exception as e:
             logger.error(f"❌ Failed to connect to WebSocket: {e}")
             self.connected = False
+            raise
+    
+    async def _register_with_backend(self):
+        """Send registration message to backend."""
+        try:
+            registration_msg = {
+                "type": "register_client",
+                "payload": {
+                    "client_type": "rpi",
+                    "client_name": self.client_name,
+                    "capabilities": self.capabilities
+                }
+            }
+            
+            await self.websocket.send(json.dumps(registration_msg))
+            logger.info(f"📝 Registration message sent: {self.client_name}")
+            
+            # Wait for registration response
+            response = await asyncio.wait_for(self.websocket.recv(), timeout=5)
+            response_data = json.loads(response)
+            
+            if response_data.get("type") == "register_response":
+                payload = response_data.get("payload", {})
+                if payload.get("status") == "success":
+                    self.client_id = payload.get("client_id")
+                    logger.info(f"✅ Registration successful: {self.client_name} (ID: {self.client_id})")
+                else:
+                    logger.error(f"❌ Registration failed: {payload.get('message')}")
+                    raise Exception(f"Registration failed: {payload.get('message')}")
+            else:
+                logger.error(f"❌ Unexpected response to registration: {response_data}")
+                raise Exception("Unexpected registration response")
+        
+        except asyncio.TimeoutError:
+            logger.error("❌ Registration response timeout")
+            raise Exception("Registration timeout")
+        except Exception as e:
+            logger.error(f"❌ Registration error: {e}")
             raise
     
     async def _listen(self):

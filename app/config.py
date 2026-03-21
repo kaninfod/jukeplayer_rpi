@@ -17,6 +17,10 @@ class PiConfig:
     BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
     BACKEND_WS_URL = os.getenv("BACKEND_WS_URL", "ws://127.0.0.1:8000/ws/mediaplayer/status")
     
+    # Client registration name (must be unique, user-friendly)
+    # Used to identify this hardware client in the system
+    CLIENT_NAME = os.getenv("CLIENT_NAME", "rpi_main")
+    
     # === HARDWARE MODE ===
     # Set to "mock" for development without physical hardware
     # Set to "real" for actual Raspberry Pi hardware

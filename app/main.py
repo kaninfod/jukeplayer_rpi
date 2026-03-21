@@ -38,7 +38,11 @@ class PiClientApp:
         self.config = config
         self.event_bus = event_bus
         self.api_client = BackendAPIClient(backend_url=config.BACKEND_URL)
-        self.ws_client = BackendWebSocketClient(backend_ws_url=config.BACKEND_WS_URL)
+        self.ws_client = BackendWebSocketClient(
+            backend_ws_url=config.BACKEND_WS_URL,
+            client_name=config.CLIENT_NAME,
+            capabilities=["nfc_reader", "display", "buttons", "rotary_encoder"]
+        )
         self.event_translator = EventTranslator(api_client=self.api_client)
         self.state_manager = StateManager()
         self.connection_monitor = ConnectionMonitor(
@@ -55,7 +59,7 @@ class PiClientApp:
         
         self.is_running = False
         
-        logger.info(f"Pi Client initialized - Mode: {config.HARDWARE_MODE}, Backend: {config.BACKEND_URL}")
+        logger.info(f"Pi Client initialized - Mode: {config.HARDWARE_MODE}, Backend: {config.BACKEND_URL}, Client: {config.CLIENT_NAME}")
     
     async def initialize_hardware(self):
         """Initialize hardware components based on HARDWARE_MODE."""
