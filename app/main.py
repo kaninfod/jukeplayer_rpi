@@ -212,32 +212,41 @@ class PiClientApp:
             if self.screen_manager:
                 await self.screen_manager.show_message("Backend Disconnected", duration=0)
         
-        # NFC encoding handler
+        # NFC encoding handler (fire and forget - launch background task)
         async def on_encode_nfc(message):
-            """Handle NFC encoding request from backend."""
+            """Handle NFC encoding request - launch background task immediately."""
+            payload = message.get("payload", {})
+            album_id = payload.get("album_id")
+            logger.info(f"NFC encode request for album_id: {album_id} - launching background task")
+            # Fire and forget - don't block the message handler
+            asyncio.create_task(do_nfc_encoding(album_id))
+        
+        async def do_nfc_encoding(album_id):
+            """Run NFC encoding in background to keep WebSocket responsive."""
             try:
-                payload = message.get("payload", {})
-                album_id = payload.get("album_id")
-                logger.info(f"NFC encode request for album_id: {album_id}")
+                logger.info(f"[NFC-BG] Starting write_data for album_id: {album_id}")
                 
                 if not self.hardware or not self.hardware.rfid_reader:
-                    logger.error("NFC reader not available")
+                    logger.error("[NFC-BG] NFC reader not available")
                     return
                 
                 # Instantiate reader and call write_data
                 reader = self.hardware.rfid_reader()
                 result = reader.write_data(album_id)
-                logger.info(f"NFC write result - status: {result.get('status')}, uid: {result.get('uid')}")
+                logger.info(f"[NFC-BG] NFC write result - status: {result.get('status')}, uid: {result.get('uid')}")
                 
                 # Send completion message back to backend via WebSocket
                 response = {
                     "type": "nfc_encoding_complete",
                     "payload": result
                 }
-                # Use event loop to send async message
-                asyncio.create_task(self.ws_client.ws.send(json.dumps(response)))
+                # Send via WebSocket
+                if self.ws_client.ws:
+                    await self.ws_client.ws.send(json.dumps(response))
+                else:
+                    logger.error("[NFC-BG] WebSocket not available for response")
             except Exception as e:
-                logger.error(f"Error handling NFC encoding: {e}", exc_info=True)
+                logger.error(f"[NFC-BG] Error handling NFC encoding: {e}", exc_info=True)
                 response = {
                     "type": "nfc_encoding_complete",
                     "payload": {
@@ -247,9 +256,10 @@ class PiClientApp:
                     }
                 }
                 try:
-                    asyncio.create_task(self.ws_client.ws.send(json.dumps(response)))
+                    if self.ws_client.ws:
+                        await self.ws_client.ws.send(json.dumps(response))
                 except Exception as send_error:
-                    logger.error(f"Failed to send NFC error response: {send_error}")
+                    logger.error(f"[NFC-BG] Failed to send error response: {send_error}")
         
         # Register WebSocket callbacks
         self.ws_client.on("message", on_status_update)
