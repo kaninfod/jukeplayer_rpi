@@ -240,11 +240,16 @@ class PiClientApp:
                     "type": "nfc_encoding_complete",
                     "payload": result
                 }
-                # Send via WebSocket
-                if self.ws_client.ws:
-                    await self.ws_client.ws.send(json.dumps(response))
+                
+                # Send via WebSocket (ws_client.websocket is the actual connection)
+                if self.ws_client.websocket:
+                    try:
+                        await self.ws_client.websocket.send(json.dumps(response))
+                        logger.info(f"[NFC-BG] Sent response back to backend")
+                    except Exception as send_error:
+                        logger.error(f"[NFC-BG] Failed to send response: {send_error}")
                 else:
-                    logger.error("[NFC-BG] WebSocket not available for response")
+                    logger.error("[NFC-BG] WebSocket not connected")
             except Exception as e:
                 logger.error(f"[NFC-BG] Error handling NFC encoding: {e}", exc_info=True)
                 response = {
@@ -256,8 +261,8 @@ class PiClientApp:
                     }
                 }
                 try:
-                    if self.ws_client.ws:
-                        await self.ws_client.ws.send(json.dumps(response))
+                    if self.ws_client.websocket:
+                        await self.ws_client.websocket.send(json.dumps(response))
                 except Exception as send_error:
                     logger.error(f"[NFC-BG] Failed to send error response: {send_error}")
         
