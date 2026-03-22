@@ -240,53 +240,46 @@ class PiClientApp:
                 self.nfc_encoding_album_id = None
         
         async def do_nfc_encoding(album_id):
-            """Run NFC encoding in background to keep WebSocket responsive."""
+            """Run NFC encoding in background - wait for microswitch to handle the write."""
             try:
-                logger.info(f"[NFC-BG] Starting write_data for album_id: {album_id}")
+                logger.info(f"[NFC-BG] Encoding mode activated for album_id: {album_id}")
+                logger.info(f"[NFC-BG] Waiting for microswitch to write card (up to 30 seconds)...")
                 
-                if not self.hardware or not self.hardware.rfid_reader:
-                    logger.error("[NFC-BG] NFC reader not available")
-                    return
+                # The microswitch callback will handle the actual write and send the result back
+                # This task just waits for the timeout to clear the flag if no card is inserted
+                await asyncio.sleep(30)
                 
-                # Instantiate reader and call write_data
-                reader = self.hardware.rfid_reader()
-                result = reader.write_data(album_id)
-                logger.info(f"[NFC-BG] NFC write result - status: {result.get('status')}, uid: {result.get('uid')}")
+                # If we reach here, timeout occurred (no card was written)
+                logger.warning(f"[NFC-BG] Encoding timeout after 30 seconds - no card was written")
                 
-                # Send completion message back to backend via WebSocket
-                response = {
-                    "type": "nfc_encoding_complete",
-                    "payload": result
-                }
-                
-                # Send via WebSocket (ws_client.websocket is the actual connection)
-                if self.ws_client.websocket:
-                    try:
-                        await self.ws_client.websocket.send(json.dumps(response))
-                        logger.info(f"[NFC-BG] Sent response back to backend")
-                    except Exception as send_error:
-                        logger.error(f"[NFC-BG] Failed to send response: {send_error}")
-                else:
-                    logger.error("[NFC-BG] WebSocket not connected")
-            except Exception as e:
-                logger.error(f"[NFC-BG] Error handling NFC encoding: {e}", exc_info=True)
+                # Send timeout result to backend
                 response = {
                     "type": "nfc_encoding_complete",
                     "payload": {
-                        "status": "error",
+                        "status": "timeout",
                         "uid": None,
-                        "error_message": str(e)
+                        "error_message": "No card detected within 30 seconds"
                     }
                 }
-                try:
-                    if self.ws_client.websocket:
+                
+                if self.ws_client.websocket:
+                    try:
                         await self.ws_client.websocket.send(json.dumps(response))
-                except Exception as send_error:
-                    logger.error(f"[NFC-BG] Failed to send error response: {send_error}")
+                        logger.info(f"[NFC-BG] Sent timeout result back to backend")
+                    except Exception as send_error:
+                        logger.error(f"[NFC-BG] Failed to send timeout response: {send_error}")
+                else:
+                    logger.error("[NFC-BG] WebSocket not connected, cannot send timeout result")
+            except asyncio.CancelledError:
+                logger.info(f"[NFC-BG] Encoding task was cancelled")
+                raise
+            except Exception as e:
+                logger.error(f"[NFC-BG] Error in encoding task: {e}", exc_info=True)
             finally:
-                # Clear encoding mode flag
-                self.nfc_encoding_album_id = None
-                logger.info("[NFC-BG] Encoding mode cleared")
+                # Ensure encoding mode flag is cleared
+                if self.nfc_encoding_album_id == album_id:
+                    self.nfc_encoding_album_id = None
+                    logger.info("[NFC-BG] Encoding mode cleared")
         
         # Register WebSocket callbacks
         self.ws_client.on("message", on_status_update)

@@ -4,8 +4,8 @@ Handles initialization and callbacks for all hardware devices.
 """
 #from .devices.ili9488 import ILI9488
 #from .devices.rfid import RC522Reader
-import logging
-from app.core import EventType, Event
+import loggingimport asyncio
+import jsonfrom app.core import EventType, Event
 
 logger = logging.getLogger(__name__)
 
@@ -161,16 +161,42 @@ class HardwareManager:
         # Check if we're in NFC encoding mode
         if self.app and self.app.nfc_encoding_album_id:
             # ENCODING MODE: Write the album ID to the card
-            logger.info(f"   └─ ENCODING MODE: Writing album_id={self.app.nfc_encoding_album_id}")
+            album_id = self.app.nfc_encoding_album_id
+            logger.info(f"   └─ ENCODING MODE: Writing album_id={album_id}")
             logger.info("2. INSTANTIATE & START WRITING")
             logger.info("   └─ Creating PN532Reader instance for write")
             reader = self.rfid_reader()
             try:
                 # Synchronous write (blocking, but OK here since we're not in async handler)
-                result = reader.write_data(self.app.nfc_encoding_album_id)
+                result = reader.write_data(album_id)
                 logger.info(f"   └─ Write complete: status={result.get('status')}, uid={result.get('uid')}")
+                
+                # Send result back to backend via WebSocket
+                if self.app.event_loop and self.app.ws_client:
+                    async def send_encoding_result():
+                        response = {
+                            "type": "nfc_encoding_complete",
+                            "payload": result
+                        }
+                        try:
+                            if self.app.ws_client.websocket:
+                                await self.app.ws_client.websocket.send(json.dumps(response))
+                                logger.info("   └─ Sent encoding result back to backend")
+                            else:
+                                logger.error("   ❌ WebSocket not connected")
+                        except Exception as send_error:
+                            logger.error(f"   ❌ Failed to send result to backend: {send_error}")
+                    
+                    # Schedule the async task to send result
+                    asyncio.run_coroutine_threadsafe(send_encoding_result(), self.app.event_loop)
+                
+                # Clear the encoding flag immediately after write
+                self.app.nfc_encoding_album_id = None
+                logger.info("   └─ Encoding mode cleared")
             except Exception as e:
                 logger.error(f"   ❌ write_data() failed: {e}")
+                # Clear encoding flag on error too
+                self.app.nfc_encoding_album_id = None
         else:
             # NORMAL MODE: Read from the card
             logger.info("   └─ NORMAL MODE: Reading from card")
