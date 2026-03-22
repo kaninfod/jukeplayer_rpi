@@ -4,8 +4,10 @@ Handles initialization and callbacks for all hardware devices.
 """
 #from .devices.ili9488 import ILI9488
 #from .devices.rfid import RC522Reader
-import loggingimport asyncio
-import jsonfrom app.core import EventType, Event
+import logging
+import asyncio
+import json
+from app.core import EventType, Event
 
 logger = logging.getLogger(__name__)
 
