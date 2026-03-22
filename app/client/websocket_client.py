@@ -51,6 +51,13 @@ class BackendWebSocketClient:
         except Exception as e:
             logger.error(f"❌ Failed to connect to WebSocket: {e}")
             self.connected = False
+            # Clean up the websocket if it was created but registration failed
+            if self.websocket:
+                try:
+                    await self.websocket.close()
+                except Exception as close_err:
+                    logger.debug(f"Error closing websocket after failed registration: {close_err}")
+                self.websocket = None
             raise
     
     async def _register_with_backend(self):

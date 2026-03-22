@@ -18,7 +18,7 @@ class ConnectionMonitor:
         self,
         ws_client,
         heartbeat_interval: int = 30,
-        reconnect_delay: int = 5,
+        reconnect_delay: int = 2,
         max_reconnect_attempts: int = 0,
     ):
         """
@@ -27,7 +27,7 @@ class ConnectionMonitor:
         Args:
             ws_client: WebSocket client instance
             heartbeat_interval: Seconds between heartbeats
-            reconnect_delay: Seconds to wait before reconnection attempts
+            reconnect_delay: Initial seconds to wait before reconnection attempts
             max_reconnect_attempts: Max reconnection attempts (0 = infinite)
         """
         self.ws_client = ws_client
@@ -113,9 +113,11 @@ class ConnectionMonitor:
                     if (self.max_reconnect_attempts == 0 or
                         self.reconnect_count < self.max_reconnect_attempts):
                         
+                        # Linear backoff with 2x multiplier, capped at 60 seconds
+                        # Progression: 2s → 4s → 8s → 16s → 32s → 60s → 60s → ...
                         delay = min(
                             self.reconnect_delay * (2 ** self.reconnect_count),
-                            300  # Cap at 5 minutes
+                            60  # Cap at 1 minute (much faster than the previous 5 min)
                         )
                         
                         logger.info(
