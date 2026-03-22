@@ -268,11 +268,17 @@ class PiClientApp:
                 logger.info(f"[NFC-BG] Waiting for microswitch to write card (up to 30 seconds)...")
                 
                 # The microswitch callback will handle the actual write and send the result back
-                # This task just waits and does nothing - the microswitch will terminate the encoding
-                await asyncio.sleep(30)
+                # We sleep in 1-second chunks and check if the flag was cleared (meaning microswitch handled it)
+                for i in range(30):
+                    await asyncio.sleep(1)
+                    
+                    # If flag was cleared, microswitch already handled the write and sent the result
+                    if self.nfc_encoding_album_id != album_id:
+                        logger.info(f"[NFC-BG] Encoding flag cleared by microswitch - exiting early")
+                        return
                 
-                # If we reach here, no card was written (shouldn't happen since wrapper handles timeout)
-                logger.warning(f"[NFC-BG] 30 second wait completed without card write")
+                # If we reach here, 30 seconds elapsed without microswitch firing
+                logger.warning(f"[NFC-BG] 30 second timeout expired - no card was detected")
             except asyncio.CancelledError:
                 # Task was cancelled (likely by timeout wrapper)
                 logger.info(f"[NFC-BG] Encoding task was cancelled")
