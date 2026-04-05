@@ -23,7 +23,7 @@ class BackendWebSocketClient:
         Initialize WebSocket client.
         
         Args:
-            backend_ws_url: WebSocket URL for backend (e.g., "ws://192.168.1.100:8000/ws/mediaplayer/status")
+            backend_ws_url: WebSocket URL for backend (e.g., "ws://192.168.1.100:8000/ws/mediaplayer/events?detail=minimal")
             client_name: User-friendly name for this client (from config)
             capabilities: List of capabilities this client has (e.g., ['nfc_reader', 'display'])
         """
@@ -120,6 +120,34 @@ class BackendWebSocketClient:
             logger.error(f"WebSocket listening error: {e}")
             self.connected = False
     
+    async def send_command(self, command_type: str, payload: dict = None) -> bool:
+        """
+        Send a command to the backend via WebSocket.
+        
+        Args:
+            command_type: The type of command (e.g., 'play_pause', 'next_track')
+            payload: Optional payload data for the command
+            
+        Returns:
+            True if command was sent successfully, False otherwise
+        """
+        if not self.ws or self.ws.closed:
+            logger.warning(f"Cannot send {command_type} command: WebSocket not connected")
+            return False
+            
+        message = {
+            "type": command_type,
+            "payload": payload or {}
+        }
+        
+        try:
+            await self.ws.send_json(message)
+            logger.debug(f"Sent WebSocket command: {command_type}")
+            return True
+        except Exception as e:
+            logger.error(f"Error sending command {command_type}: {e}")
+            return False
+
     async def _handle_message(self, message: str):
         """Handle incoming message and dispatch to listeners."""
         try:

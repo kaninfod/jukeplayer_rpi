@@ -44,7 +44,10 @@ class PiClientApp:
             client_name=config.CLIENT_NAME,
             capabilities=["nfc_reader", "display", "buttons", "rotary_encoder"]
         )
-        self.event_translator = EventTranslator(api_client=self.api_client)
+        self.event_translator = EventTranslator(
+            api_client=self.api_client,
+            ws_client=self.ws_client
+        )
         self.state_manager = StateManager()
         self.connection_monitor = ConnectionMonitor(
             ws_client=self.ws_client,

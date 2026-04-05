@@ -12,14 +12,16 @@ logger = logging.getLogger(__name__)
 class EventTranslator:
     """Translates hardware events into backend API calls."""
     
-    def __init__(self, api_client):
+    def __init__(self, api_client, ws_client=None):
         """
         Initialize translator.
         
         Args:
             api_client: BackendAPIClient instance
+            ws_client: BackendWebSocketClient instance
         """
         self.api = api_client
+        self.ws = ws_client
     
     async def on_button_pressed(self, event: dict):
         """
@@ -38,20 +40,32 @@ class EventTranslator:
             
             if button == 1:
                 logger.info("Button 1: Previous track")
-                await self.api.previous_track()
+                if self.ws:
+                    await self.ws.send_command("previous_track")
+                else:
+                    await self.api.previous_track()
             
             elif button == 2:
                 logger.info("Button 2: Play/Pause")
-                await self.api.play_pause()
+                if self.ws:
+                    await self.ws.send_command("play_pause")
+                else:
+                    await self.api.play_pause()
             
             elif button == 3:
                 logger.info("Button 3: Next track")
-                await self.api.next_track()
+                if self.ws:
+                    await self.ws.send_command("next_track")
+                else:
+                    await self.api.next_track()
             
             elif button == 4:
                 if is_long_press:
                     logger.info("Button 4 (long): Stopping playback")
-                    await self.api.stop()
+                    if self.ws:
+                        await self.ws.send_command("stop")
+                    else:
+                        await self.api.stop()
                 else:
                     logger.info("Button 4 (short): Custom action")
                     # Could implement custom action here
@@ -77,12 +91,18 @@ class EventTranslator:
             if direction > 0:
                 logger.info(f"Rotary: Volume up ({steps} steps)")
                 for _ in range(steps):
-                    await self.api.volume_up()
+                    if self.ws:
+                        await self.ws.send_command("volume_up")
+                    else:
+                        await self.api.volume_up()
             
             elif direction < 0:
                 logger.info(f"Rotary: Volume down ({steps} steps)")
                 for _ in range(steps):
-                    await self.api.volume_down()
+                    if self.ws:
+                        await self.ws.send_command("volume_down")
+                    else:
+                        await self.api.volume_down()
         
         except Exception as e:
             logger.error(f"Error handling rotary encoder event: {e}")
@@ -106,7 +126,10 @@ class EventTranslator:
             logger.info(f"RFID: Card detected - {card_id}")
             
             # Attempt to play album or trigger encoding mode
-            await self.api.play_album_from_rfid(card_id)
+            if self.ws:
+                await self.ws.send_command("play_rfid", {"rfid": str(card_id)})
+            else:
+                await self.api.play_album_from_rfid(card_id)
         
         except Exception as e:
             logger.error(f"Error handling RFID read event: {e}")

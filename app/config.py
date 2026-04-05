@@ -15,7 +15,7 @@ class PiConfig:
     
     # === BACKEND CONNECTION ===
     BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
-    BACKEND_WS_URL = os.getenv("BACKEND_WS_URL", "ws://127.0.0.1:8000/ws/mediaplayer/status")
+    BACKEND_WS_URL = os.getenv("BACKEND_WS_URL", "ws://127.0.0.1:8000/ws/mediaplayer/events?detail=minimal")
     
     # Client registration name (must be unique, user-friendly)
     # Used to identify this hardware client in the system
